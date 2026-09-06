@@ -1,6 +1,8 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { apiFetch } from '@/lib/api';
+import { DEFAULT_INDUSTRY, type IndustryId } from '@/config/industries';
 
 // Types
 interface GSCRow {
@@ -63,6 +65,10 @@ interface WinnersLosersData {
 }
 
 interface DataContextType {
+  // Product / industry
+  selectedIndustry: IndustryId;
+  setSelectedIndustry: (industry: IndustryId) => void;
+
   // Sites
   sites: string[];
   setSites: (sites: string[]) => void;
@@ -154,6 +160,11 @@ interface DataProviderProps {
 }
 
 export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
+  const [selectedIndustry, setSelectedIndustry] = useState<IndustryId>(() => {
+    if (typeof window === 'undefined') return DEFAULT_INDUSTRY;
+    return (localStorage.getItem('selectedIndustry') as IndustryId) || DEFAULT_INDUSTRY;
+  });
+
   // Sites
   const [sites, setSites] = useState<string[]>([]);
   
@@ -209,14 +220,14 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
   const [winnersLosersLoading, setWinnersLosersLoading] = useState(false);
   
   // Fetch sites function
-  const fetchSites = async () => {
+  const fetchSites = useCallback(async () => {
     if (sites.length > 0) return; // Don't refetch if already have sites
-    
+
     setSitesLoading(true);
     setError('');
     
     try {
-      const response = await fetch('http://localhost:5001/api/sites');
+      const response = await apiFetch('/api/sites');
       const result = await response.json();
       if (result.sites) {
         setSites(result.sites);
@@ -227,7 +238,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         // Set top sites for overview - check if saved in settings first
         if (topSites.length === 0) {
           // Try to load from settings
-          fetch('http://localhost:5001/api/settings')
+          apiFetch('/api/settings')
             .then(res => res.json())
             .then(settingsData => {
               if (settingsData.overviewSites && settingsData.overviewSites.length > 0) {
@@ -247,7 +258,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     } finally {
       setSitesLoading(false);
     }
-  };
+  }, [sites.length, selectedSite, topSites, setError, setSites, setSelectedSite, setTopSites]);
   
   // Clear functions
   const clearPerformanceData = () => {
@@ -279,9 +290,20 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
   // Fetch sites on mount
   useEffect(() => {
     fetchSites();
-  }, []);
+  }, [fetchSites]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('selectedIndustry', selectedIndustry);
+    } catch {
+      // Ignore storage failures in private browsing modes.
+    }
+  }, [selectedIndustry]);
   
   const value: DataContextType = {
+    selectedIndustry,
+    setSelectedIndustry,
+
     // Sites
     sites,
     setSites,

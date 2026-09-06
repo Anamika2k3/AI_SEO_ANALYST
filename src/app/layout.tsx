@@ -1,16 +1,19 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import Sidebar from "@/components/layout/Sidebar";
-import Header from "@/components/layout/Header";
-import AuthBanner from "@/components/layout/AuthBanner";
+import AppShell from "@/components/layout/AppShell";
 import { DataProvider } from "@/contexts/DataContext";
+import { PRODUCT_COPY } from "@/config/product";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "GSC Analytics Dashboard",
-  description: "Google Search Console Analytics Dashboard with Advanced Insights",
+  title: `${PRODUCT_COPY.productName} | ${PRODUCT_COPY.altName}`,
+  description: PRODUCT_COPY.tagline,
+  icons: {
+    icon: '/favicon.png',
+    apple: '/favicon.png',
+  },
 };
 
 export default function RootLayout({
@@ -20,28 +23,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.className} bg-gray-50`}>
+      <body className={`${inter.className} bg-slate-50 text-slate-950`}>
         <DataProvider>
-          {/* Authentication Banner */}
-          <AuthBanner />
-          
-          <div className="flex h-screen overflow-hidden">
-            {/* Sidebar */}
-            <Sidebar />
-            
-            {/* Main Content */}
-            <div className="flex-1 flex flex-col overflow-hidden">
-              {/* Header */}
-              <Header />
-              
-              {/* Page Content */}
-              <main className="flex-1 overflow-auto bg-gray-50">
-                <div className="p-6">
-                  {children}
-                </div>
-              </main>
-            </div>
-          </div>
+          <AppShell>{children}</AppShell>
         </DataProvider>
       </body>
     </html>

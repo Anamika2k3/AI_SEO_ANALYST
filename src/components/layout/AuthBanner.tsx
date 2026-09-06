@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faExclamationTriangle, faTimes, faCog, faArrowRight } from '@fortawesome/free-solid-svg-icons';
 import Link from 'next/link';
+import { apiFetch } from '@/lib/api';
 
 export default function AuthBanner() {
   const pathname = usePathname();
@@ -14,7 +15,7 @@ export default function AuthBanner() {
 
   const checkAuthStatus = async () => {
     try {
-      const response = await fetch('http://localhost:5001/api/status');
+      const response = await apiFetch('/api/status');
       if (response.ok) {
         const data = await response.json();
         setIsAuthenticated(data.gsc_connected || false);
@@ -62,7 +63,7 @@ export default function AuthBanner() {
                 Authentication Required
               </h3>
               <p className="text-sm text-yellow-800 mb-2">
-                To use the dashboard, you need to authenticate with Google Search Console. 
+                To use live SEO Intelligence features, authenticate with Google Search Console.
                 Please go to Settings and follow these steps:
               </p>
               <ol className="text-sm text-yellow-800 list-decimal list-inside space-y-1 mb-3">

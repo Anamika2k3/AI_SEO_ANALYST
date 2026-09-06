@@ -1,6 +1,6 @@
-# GSC Dashboard
+# SEOplus Intelligence
 
-A full-featured Google Search Console analytics dashboard built with Next.js and a Flask backend. Provides traffic analysis, keyword insights, URL inspection, sitemap management, and AI-powered analysis.
+SEOplus Intelligence analyzes webpages for technical SEO, loading performance, images, alt text, headings, keywords, structured data, and content opportunities. Google Search Console is optional: connect it for deeper search-performance, query, ranking, and click insights.
 
 ![Next.js](https://img.shields.io/badge/Next.js-15.3-black)
 ![Flask](https://img.shields.io/badge/Flask-2.3-green)
@@ -120,6 +120,16 @@ Configure API credentials, authorize Search Console access, and control overview
 - **Google API Python Client** for GSC API access
 - **OpenAI** for AI-powered insights
 - **Pandas** for data processing
+
+## Architecture
+
+Two independent processes talk over local REST/JSON: a Next.js frontend (port 3000) calls a Flask backend (port 5001), which in turn talks to Google Search Console, Google Trends, and an OpenAI-compatible AI provider (OpenAI or Groq). There's no database — the backend persists its own config to a single local JSON file, and all Google/AI credentials stay on that machine.
+
+![Technical Architecture](./public/readme-images/tech-architecture.png)
+
+Two request paths exist side by side:
+- **Public audit** — no login required. A pasted URL goes straight to `/api/page-audit`, which fetches and parses the page server-side and returns a rule-based SEO score, with an optional `/api/page-audit-insights` call for an AI-written summary.
+- **GSC-connected dashboard** — after authorizing Search Console (and optionally Google Trends, which uses a separate OAuth client) in Settings, the rest of the dashboard pulls real performance data and offers AI insights on it.
 
 ## Getting Started
 

@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { Button } from '@/components/ui/button';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSitemap, faSpinner, faPlus, faTrash, faRefresh, faExclamationTriangle, faCheckCircle, faInfoCircle, faEye, faTimes } from '@fortawesome/free-solid-svg-icons';
+import { apiFetch, apiUrl } from '@/lib/api';
 
 interface SitemapContent {
   type: string;
@@ -39,20 +40,7 @@ export default function SitemapPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchSites();
-    if (sites.length > 0 && !selectedSite) {
-      setSelectedSite(sites[0]);
-    }
-  }, [sites]);
-
-  useEffect(() => {
-    if (selectedSite) {
-      loadSitemaps();
-    }
-  }, [selectedSite]);
-
-  const loadSitemaps = async () => {
+  const loadSitemaps = useCallback(async () => {
     if (!selectedSite) return;
 
     setLoading(true);
@@ -60,7 +48,7 @@ export default function SitemapPage() {
     setSuccess(null);
 
     try {
-      const url = `http://localhost:5001/api/sitemaps?siteUrl=${encodeURIComponent(selectedSite)}`;
+      const url = apiUrl(`/api/sitemaps?siteUrl=${encodeURIComponent(selectedSite)}`);
       console.log('[FRONTEND] Loading sitemaps for:', selectedSite);
       console.log('[FRONTEND] Request URL:', url);
       
@@ -96,7 +84,20 @@ export default function SitemapPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedSite]);
+
+  useEffect(() => {
+    fetchSites();
+    if (sites.length > 0 && !selectedSite) {
+      setSelectedSite(sites[0]);
+    }
+  }, [fetchSites, sites, selectedSite]);
+
+  useEffect(() => {
+    if (selectedSite) {
+      loadSitemaps();
+    }
+  }, [selectedSite, loadSitemaps]);
 
   const handleSubmit = async () => {
     if (!newSitemapPath.trim()) {
@@ -114,7 +115,7 @@ export default function SitemapPage() {
     setSuccess(null);
 
     try {
-      const response = await fetch('http://localhost:5001/api/sitemaps/submit', {
+      const response = await apiFetch('/api/sitemaps/submit', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -160,7 +161,7 @@ export default function SitemapPage() {
     setSuccess(null);
 
     try {
-      const response = await fetch('http://localhost:5001/api/sitemaps/delete', {
+      const response = await apiFetch('/api/sitemaps/delete', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -211,7 +212,7 @@ export default function SitemapPage() {
 
     try {
       const response = await fetch(
-        `http://localhost:5001/api/sitemaps/get?siteUrl=${encodeURIComponent(selectedSite)}&feedpath=${encodeURIComponent(sitemap.path)}`
+        apiUrl(`/api/sitemaps/get?siteUrl=${encodeURIComponent(selectedSite)}&feedpath=${encodeURIComponent(sitemap.path)}`)
       );
 
       const data = await response.json();

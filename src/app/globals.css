@@ -45,6 +45,87 @@ body {
   color: var(--color-foreground);
 }
 
+@keyframes seo-reveal {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes seo-float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-10px) rotate(0.5deg); }
+}
+
+@keyframes seo-pop {
+  from { opacity: 0; transform: scale(0.94) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes seo-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes seo-pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(232, 119, 79, 0.35); }
+  70% { box-shadow: 0 0 0 12px rgba(232, 119, 79, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(232, 119, 79, 0); }
+}
+
+@keyframes seo-shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.animate-seo-reveal { animation: seo-reveal 700ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-seo-float { animation: seo-float 7s ease-in-out infinite; }
+.animate-seo-pop { animation: seo-pop 600ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-seo-fade-in { animation: seo-fade-in 500ms ease-out both; }
+.animate-seo-pulse-ring { animation: seo-pulse-ring 2s ease-out infinite; }
+
+.seo-in-view {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 700ms cubic-bezier(0.16, 1, 0.3, 1), transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.seo-in-view.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.seo-skeleton {
+  background: linear-gradient(90deg, #eef1ee 25%, #f8faf7 37%, #eef1ee 63%);
+  background-size: 400px 100%;
+  animation: seo-shimmer 1.4s ease-in-out infinite;
+}
+
+.seo-score-ring circle {
+  transition: stroke-dashoffset 1s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.seo-progress-fill {
+  transition: width 900ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-seo-reveal,
+  .animate-seo-float,
+  .animate-seo-pop,
+  .animate-seo-fade-in,
+  .animate-seo-pulse-ring,
+  .seo-skeleton {
+    animation: none !important;
+  }
+  .seo-in-view {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .seo-score-ring circle,
+  .seo-progress-fill {
+    transition: none;
+  }
+}
+
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);

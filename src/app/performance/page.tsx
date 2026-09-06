@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Chart from 'chart.js/auto';
 import { useData } from '@/contexts/DataContext';
+import { apiUrl } from '@/lib/api';
 
 interface GSCRow {
   keys?: string[];
@@ -27,6 +28,30 @@ interface ProcessedDataItem {
   position: number;
   query: string;
 }
+
+const METRICS = ['clicks', 'impressions', 'ctr', 'position'] as const;
+const METRIC_LABELS: { [key: string]: string } = {
+  clicks: 'Clicks',
+  impressions: 'Impressions',
+  ctr: 'CTR (%)',
+  position: 'Avg Position'
+};
+
+const calculateCorrelation = (x: number[], y: number[]): number => {
+  if (x.length !== y.length || x.length === 0) return 0;
+
+  const n = x.length;
+  const sumX = x.reduce((a, b) => a + b, 0);
+  const sumY = y.reduce((a, b) => a + b, 0);
+  const sumXY = x.reduce((sum, xi, i) => sum + xi * y[i], 0);
+  const sumX2 = x.reduce((sum, xi) => sum + xi * xi, 0);
+  const sumY2 = y.reduce((sum, yi) => sum + yi * yi, 0);
+
+  const numerator = n * sumXY - sumX * sumY;
+  const denominator = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+
+  return denominator === 0 ? 0 : numerator / denominator;
+};
 
 export default function PerformancePage() {
   const {
@@ -55,15 +80,6 @@ export default function PerformancePage() {
   const chartRefs = useRef<{[key: string]: HTMLCanvasElement | null}>({});
   const chartInstances = useRef<{[key: string]: Chart}>({});
 
-  // Metrics for correlation matrix
-  const metrics = ['clicks', 'impressions', 'ctr', 'position'] as const;
-  const metricLabels: {[key: string]: string} = {
-    clicks: 'Clicks',
-    impressions: 'Impressions', 
-    ctr: 'CTR (%)',
-    position: 'Avg Position'
-  };
-
   // Load cached performance data if available and matches current settings
   useEffect(() => {
     if (performanceData && 
@@ -78,19 +94,140 @@ export default function PerformancePage() {
   }, [performanceData, selectedSite, startDate, endDate, device]);
 
   // Update charts when data changes
+  const createCorrelationMatrix = useCallback(() => {
+    if (!data || !data.rows) return;
+
+    const processedData: ProcessedDataItem[] = data.rows.map((row: GSCRow) => ({
+      clicks: row.clicks || 0,
+      impressions: row.impressions || 0,
+      ctr: (row.ctr || 0) * 100,
+      position: row.position || 0,
+      query: row.keys?.[0] || 'Unknown'
+    }));
+
+    const filteredData = processedData.filter(item =>
+      item.clicks > 0 || item.impressions > 0
+    );
+
+    console.log(`Processing ${filteredData.length} data points for correlation matrix`);
+
+    METRICS.forEach((xMetric, xIndex) => {
+      METRICS.forEach((yMetric, yIndex) => {
+        const chartKey = `${xMetric}-${yMetric}`;
+        const canvasRef = chartRefs.current[chartKey];
+
+        if (!canvasRef) return;
+
+        if (chartInstances.current[chartKey]) {
+          chartInstances.current[chartKey].destroy();
+        }
+
+        const ctx = canvasRef.getContext('2d');
+        if (!ctx) return;
+
+        const chartData = filteredData.map(item => ({
+          x: item[xMetric],
+          y: item[yMetric]
+        }));
+
+        const correlation = calculateCorrelation(
+          filteredData.map(item => item[xMetric]),
+          filteredData.map(item => item[yMetric])
+        );
+
+        const getPointColor = () => {
+          const absCorr = Math.abs(correlation);
+          if (absCorr >= 0.7) return correlation > 0 ? '#10B981' : '#EF4444';
+          if (absCorr >= 0.4) return correlation > 0 ? '#F59E0B' : '#F97316';
+          return '#6B7280';
+        };
+
+        chartInstances.current[chartKey] = new Chart(ctx, {
+          type: 'scatter',
+          data: {
+            datasets: [{
+              data: chartData,
+              backgroundColor: getPointColor(),
+              borderColor: getPointColor(),
+              pointRadius: xMetric === yMetric ? 0 : 3,
+              pointHoverRadius: 5,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+              legend: {
+                display: false
+              },
+              title: {
+                display: true,
+                text: xMetric === yMetric
+                  ? `${METRIC_LABELS[xMetric]}`
+                  : `r = ${correlation.toFixed(3)}`,
+                font: {
+                  size: 12,
+                  weight: xMetric === yMetric ? 'bold' : 'normal'
+                },
+                color: xMetric === yMetric ? '#1F2937' : getPointColor()
+              },
+              tooltip: {
+                callbacks: {
+                  label: function(context: any) {
+                    const dataIndex = context.dataIndex;
+                    const item = filteredData[dataIndex];
+                    return [
+                      `Query: ${item.query.substring(0, 30)}...`,
+                      `${METRIC_LABELS[xMetric]}: ${context.parsed.x}`,
+                      `${METRIC_LABELS[yMetric]}: ${context.parsed.y}`
+                    ];
+                  }
+                }
+              }
+            },
+            scales: {
+              x: {
+                display: xIndex === 3,
+                title: {
+                  display: xIndex === 3,
+                  text: METRIC_LABELS[xMetric]
+                },
+                grid: {
+                  display: false
+                }
+              },
+              y: {
+                display: yIndex === 0,
+                title: {
+                  display: yIndex === 0,
+                  text: METRIC_LABELS[yMetric]
+                },
+                grid: {
+                  display: false
+                }
+              }
+            },
+            interaction: {
+              intersect: false
+            }
+          }
+        });
+      });
+    });
+  }, [data]);
+
   useEffect(() => {
     if (data && data.rows) {
       createCorrelationMatrix();
     }
     
-    // Cleanup function
     return () => {
       Object.values(chartInstances.current).forEach(chart => {
         if (chart) chart.destroy();
       });
       chartInstances.current = {};
     };
-  }, [data]);
+  }, [data, createCorrelationMatrix]);
 
   const fetchData = async () => {
     if (!selectedSite) return;
@@ -110,7 +247,7 @@ export default function PerformancePage() {
         params.append('device', device);
       }
 
-      const response = await fetch(`http://localhost:5001/api/data?${params}`);
+      const response = await fetch(apiUrl(`/api/data?${params}`));
       
       if (!response.ok) {
         const errorText = await response.text();
@@ -156,152 +293,6 @@ export default function PerformancePage() {
   // Manual refresh function
   const handleRefreshData = () => {
     fetchData();
-  };
-
-  const createCorrelationMatrix = () => {
-    if (!data || !data.rows) return;
-
-    // Process data for correlation analysis
-    const processedData: ProcessedDataItem[] = data.rows.map((row: GSCRow) => ({
-      clicks: row.clicks || 0,
-      impressions: row.impressions || 0,
-      ctr: (row.ctr || 0) * 100, // Convert to percentage
-      position: row.position || 0,
-      query: row.keys?.[0] || 'Unknown'
-    }));
-
-    // Filter out rows with zero values for better correlation visualization
-    const filteredData = processedData.filter(item => 
-      item.clicks > 0 || item.impressions > 0
-    );
-
-    console.log(`Processing ${filteredData.length} data points for correlation matrix`);
-
-    // Create scatter plots for each metric pair
-    metrics.forEach((xMetric, xIndex) => {
-      metrics.forEach((yMetric, yIndex) => {
-        const chartKey = `${xMetric}-${yMetric}`;
-        const canvasRef = chartRefs.current[chartKey];
-        
-        if (!canvasRef) return;
-
-        // Destroy existing chart if exists
-        if (chartInstances.current[chartKey]) {
-          chartInstances.current[chartKey].destroy();
-        }
-
-        const ctx = canvasRef.getContext('2d');
-        if (!ctx) return;
-        
-        // Prepare data for scatter plot
-        const chartData = filteredData.map(item => ({
-          x: item[xMetric],
-          y: item[yMetric]
-        }));
-
-        // Calculate correlation coefficient
-        const correlation = calculateCorrelation(
-          filteredData.map(item => item[xMetric]),
-          filteredData.map(item => item[yMetric])
-        );
-
-        // Determine point color based on correlation strength
-        const getPointColor = () => {
-          const absCorr = Math.abs(correlation);
-          if (absCorr >= 0.7) return correlation > 0 ? '#10B981' : '#EF4444';
-          if (absCorr >= 0.4) return correlation > 0 ? '#F59E0B' : '#F97316';
-          return '#6B7280';
-        };
-
-        chartInstances.current[chartKey] = new Chart(ctx, {
-          type: 'scatter',
-          data: {
-            datasets: [{
-              data: chartData,
-              backgroundColor: getPointColor(),
-              borderColor: getPointColor(),
-              pointRadius: xMetric === yMetric ? 0 : 3,
-              pointHoverRadius: 5,
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-              legend: {
-                display: false
-              },
-              title: {
-                display: true,
-                text: xMetric === yMetric 
-                  ? `${metricLabels[xMetric]}`
-                  : `r = ${correlation.toFixed(3)}`,
-                font: {
-                  size: 12,
-                  weight: xMetric === yMetric ? 'bold' : 'normal'
-                },
-                color: xMetric === yMetric ? '#1F2937' : getPointColor()
-              },
-              tooltip: {
-                callbacks: {
-                  label: function(context: any) {
-                    const dataIndex = context.dataIndex;
-                    const item = filteredData[dataIndex];
-                    return [
-                      `Query: ${item.query.substring(0, 30)}...`,
-                      `${metricLabels[xMetric]}: ${context.parsed.x}`,
-                      `${metricLabels[yMetric]}: ${context.parsed.y}`
-                    ];
-                  }
-                }
-              }
-            },
-            scales: {
-              x: {
-                display: xIndex === 3,
-                title: {
-                  display: xIndex === 3,
-                  text: metricLabels[xMetric]
-                },
-                grid: {
-                  display: false
-                }
-              },
-              y: {
-                display: yIndex === 0,
-                title: {
-                  display: yIndex === 0,
-                  text: metricLabels[yMetric]
-                },
-                grid: {
-                  display: false
-                }
-              }
-            },
-            interaction: {
-              intersect: false
-            }
-          }
-        });
-      });
-    });
-  };
-
-  // Calculate Pearson correlation coefficient
-  const calculateCorrelation = (x: number[], y: number[]): number => {
-    if (x.length !== y.length || x.length === 0) return 0;
-    
-    const n = x.length;
-    const sumX = x.reduce((a, b) => a + b, 0);
-    const sumY = y.reduce((a, b) => a + b, 0);
-    const sumXY = x.reduce((sum, xi, i) => sum + xi * y[i], 0);
-    const sumX2 = x.reduce((sum, xi) => sum + xi * xi, 0);
-    const sumY2 = y.reduce((sum, yi) => sum + yi * yi, 0);
-    
-    const numerator = n * sumXY - sumX * sumY;
-    const denominator = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
-    
-    return denominator === 0 ? 0 : numerator / denominator;
   };
 
   return (
@@ -477,10 +468,10 @@ export default function PerformancePage() {
                 {/* Column headers (X-axis) */}
                 <div className="grid grid-cols-5 gap-4 mb-2">
                   <div></div>
-                  {metrics.map((metric) => (
+                  {METRICS.map((metric) => (
                     <div key={`col-header-${metric}`} className="text-center">
                       <div className="bg-blue-100 px-2 py-1 rounded text-sm font-medium text-blue-800">
-                        {metricLabels[metric]}
+                        {METRIC_LABELS[metric]}
                       </div>
                       <div className="text-xs text-gray-500 mt-1">X-axis →</div>
                     </div>
@@ -488,18 +479,18 @@ export default function PerformancePage() {
                 </div>
                 
                 {/* Matrix rows with row headers */}
-                {metrics.map((yMetric, yIndex) => (
+                {METRICS.map((yMetric, yIndex) => (
                   <div key={`row-${yMetric}`} className="grid grid-cols-5 gap-4 mb-4">
                     {/* Row header (Y-axis) */}
                     <div className="flex items-center justify-center">
                       <div className="bg-green-100 px-2 py-1 rounded text-sm font-medium text-green-800 text-center min-h-[48px] flex flex-col justify-center">
-                        <div>{metricLabels[yMetric]}</div>
+                        <div>{METRIC_LABELS[yMetric]}</div>
                         <div className="text-xs text-gray-500">↑ Y-axis</div>
                       </div>
                     </div>
                     
                     {/* Chart cells */}
-                    {metrics.map((xMetric, xIndex) => (
+                    {METRICS.map((xMetric, xIndex) => (
                       <div key={`${xMetric}-${yMetric}`} className="relative">
                         <canvas
                           ref={(el) => {
@@ -511,7 +502,7 @@ export default function PerformancePage() {
                         <div className="absolute top-1 right-1 bg-white bg-opacity-90 px-1 py-0.5 rounded text-xs text-gray-600">
                           {xMetric === yMetric ? 
                             'Distribution' : 
-                            `${metricLabels[yMetric]} vs ${metricLabels[xMetric]}`
+                            `${METRIC_LABELS[yMetric]} vs ${METRIC_LABELS[xMetric]}`
                           }
                         </div>
                       </div>

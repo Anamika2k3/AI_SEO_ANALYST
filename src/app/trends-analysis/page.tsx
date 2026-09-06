@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useData } from '@/contexts/DataContext';
 import ReactMarkdown from 'react-markdown';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -13,6 +13,7 @@ import {
   faBrain,
   faRefresh,
 } from '@fortawesome/free-solid-svg-icons';
+import { apiFetch } from '@/lib/api';
 
 declare global {
   interface Window {
@@ -93,7 +94,7 @@ export default function TrendsAnalysisPage() {
   const chartInstance = useRef<any>(null);
 
   useEffect(() => {
-    fetch('http://localhost:5001/api/algo-updates')
+    apiFetch('/api/algo-updates')
       .then(r => r.json())
       .then(d => setAlgorithmUpdates(d.algo_updates || []))
       .catch(() => {});
@@ -104,7 +105,7 @@ export default function TrendsAnalysisPage() {
     if (selectedSite && !config.siteUrl) {
       setConfig(c => ({ ...c, siteUrl: selectedSite }));
     }
-  }, [selectedSite]);
+  }, [selectedSite, config.siteUrl]);
 
   // Load Chart.js + annotation plugin once
   useEffect(() => {
@@ -140,55 +141,13 @@ export default function TrendsAnalysisPage() {
   }, []);
 
   // Rebuild chart whenever result, toggle, or updates list changes
-  useEffect(() => {
-    if (result) buildChart(result);
-  }, [result, showAlgoUpdates, algorithmUpdates]);
-
-  const runAnalysis = async () => {
-    if (!config.siteUrl) { setError('Please select a site.'); return; }
-    setLoading(true);
-    setError(null);
-    setResult(null);
-    setInsights('');
-    setShowInsights(false);
-    if (chartInstance.current) { chartInstance.current.destroy(); chartInstance.current = null; }
-
-    try {
-      const resp = await fetch('http://localhost:5001/api/trends/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          siteUrl: config.siteUrl,
-          startDate: config.startDate,
-          endDate: config.endDate,
-          urlFilter: config.urlFilter || null,
-          queryFilter: config.queryFilter || null,
-          device: config.device || null,
-          country: config.country || null,
-          topNQueries: config.topNQueries,
-          trendsGeoCode: config.trendsGeoCode,
-          timeResolution: config.timeResolution,
-        }),
-      });
-      const data = await resp.json();
-      if (!resp.ok) { setError(data.error || 'Analysis failed.'); return; }
-      setResult(data);
-      if (config.siteUrl !== selectedSite) setSelectedSite(config.siteUrl);
-    } catch (e: any) {
-      setError(e.message || 'Network error.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const buildChart = (data: TrendsResult) => {
+  const buildChart = useCallback((data: TrendsResult) => {
     if (!chartRef.current || !window.Chart) return;
     if (chartInstance.current) chartInstance.current.destroy();
 
     const gscSorted = [...data.gscSeries].sort((a, b) => a.date.localeCompare(b.date));
     const trendsSorted = [...data.trendsAvg].sort((a, b) => a.date.localeCompare(b.date));
 
-    // Trim GSC tail beyond last Trends date (Trends has ~3-day lag)
     const lastTrendsDate = trendsSorted.length
       ? trendsSorted[trendsSorted.length - 1].date
       : null;
@@ -213,7 +172,6 @@ export default function TrendsAnalysisPage() {
 
     const trendsValues = allDates.map(snapTrends);
 
-    // Save aligned series for AI
     const aligned: AlignedPoint[] = allDates.map((d, i) => ({
       date: d,
       clicks: gscValues[i],
@@ -221,7 +179,6 @@ export default function TrendsAnalysisPage() {
     }));
     setAlignedSeries(aligned);
 
-    // Algo update annotations
     const annotations: Record<string, any> = {};
     if (showAlgoUpdates) {
       const start = new Date(config.startDate);
@@ -335,6 +292,47 @@ export default function TrendsAnalysisPage() {
         },
       },
     });
+  }, [algorithmUpdates, config.endDate, config.startDate, setAlignedSeries, showAlgoUpdates]);
+
+  useEffect(() => {
+    if (result) buildChart(result);
+  }, [result, buildChart]);
+
+  const runAnalysis = async () => {
+    if (!config.siteUrl) { setError('Please select a site.'); return; }
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    setInsights('');
+    setShowInsights(false);
+    if (chartInstance.current) { chartInstance.current.destroy(); chartInstance.current = null; }
+
+    try {
+      const resp = await apiFetch('/api/trends/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          siteUrl: config.siteUrl,
+          startDate: config.startDate,
+          endDate: config.endDate,
+          urlFilter: config.urlFilter || null,
+          queryFilter: config.queryFilter || null,
+          device: config.device || null,
+          country: config.country || null,
+          topNQueries: config.topNQueries,
+          trendsGeoCode: config.trendsGeoCode,
+          timeResolution: config.timeResolution,
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) { setError(data.error || 'Analysis failed.'); return; }
+      setResult(data);
+      if (config.siteUrl !== selectedSite) setSelectedSite(config.siteUrl);
+    } catch (e: any) {
+      setError(e.message || 'Network error.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getInsights = async () => {
@@ -352,7 +350,7 @@ export default function TrendsAnalysisPage() {
     });
 
     try {
-      const resp = await fetch('http://localhost:5001/api/trends/insights', {
+      const resp = await apiFetch('/api/trends/insights', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

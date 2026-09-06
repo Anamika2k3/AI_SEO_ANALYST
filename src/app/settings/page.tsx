@@ -5,9 +5,13 @@ import { useRouter } from 'next/navigation';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faKey, faFile, faCheckCircle, faExclamationTriangle, faSpinner, faEye, faEyeSlash, faTrash } from '@fortawesome/free-solid-svg-icons';
 import { useData } from '@/contexts/DataContext';
+import { apiFetch } from '@/lib/api';
 
 interface SettingsData {
-  openaiApiKey: string;
+  aiProvider: string;
+  aiModel: string;
+  aiApiKey: string;
+  aiBaseUrl: string;
   credentialsPath: string;
   trendsCredentialsPath: string;
   isAuthorized: boolean;
@@ -18,7 +22,10 @@ export default function SettingsPage() {
   const router = useRouter();
   const { clearAllData } = useData();
   const [settings, setSettings] = useState<SettingsData>({
-    openaiApiKey: '',
+    aiProvider: 'groq',
+    aiModel: 'openai/gpt-oss-120b',
+    aiApiKey: '',
+    aiBaseUrl: '',
     credentialsPath: '',
     trendsCredentialsPath: '',
     isAuthorized: false,
@@ -42,8 +49,8 @@ export default function SettingsPage() {
     setLoading(true);
     try {
       const [settingsResponse, sitesResponse] = await Promise.all([
-        fetch('http://localhost:5001/api/settings'),
-        fetch('http://localhost:5001/api/sites')
+        apiFetch('/api/settings'),
+        apiFetch('/api/sites')
       ]);
       
       if (settingsResponse.ok) {
@@ -51,7 +58,10 @@ export default function SettingsPage() {
         console.log('Loaded settings from backend:', data); // Debug log
         // Ensure all values are strings (not null/undefined) to prevent controlled/uncontrolled input warnings
         setSettings({
-          openaiApiKey: String(data.openaiApiKey || ''),
+          aiProvider: String(data.aiProvider || 'openai'),
+          aiModel: String(data.aiModel || 'gpt-4o'),
+          aiApiKey: String(data.aiApiKey || data.openaiApiKey || ''),
+          aiBaseUrl: String(data.aiBaseUrl || ''),
           credentialsPath: String(data.credentialsPath || ''),
           trendsCredentialsPath: String(data.trendsCredentialsPath || ''),
           isAuthorized: Boolean(data.isAuthorized || false),
@@ -80,13 +90,16 @@ export default function SettingsPage() {
     setSaving(true);
     setMessage(null);
     try {
-      const response = await fetch('http://localhost:5001/api/settings', {
+      const response = await apiFetch('/api/settings', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          openaiApiKey: settings.openaiApiKey,
+          aiProvider: settings.aiProvider,
+          aiModel: settings.aiModel,
+          aiApiKey: settings.aiApiKey,
+          aiBaseUrl: settings.aiBaseUrl,
           credentialsPath: settings.credentialsPath,
           trendsCredentialsPath: settings.trendsCredentialsPath,
           overviewSites: settings.overviewSites
@@ -101,7 +114,10 @@ export default function SettingsPage() {
         // Always use the values from the response if they exist, otherwise keep current settings
         // Always use the values from the backend response, ensuring they're strings
         const updatedSettings = {
-          openaiApiKey: String(result.openaiApiKey !== undefined && result.openaiApiKey !== null ? result.openaiApiKey : settings.openaiApiKey || ''),
+          aiProvider: String(result.aiProvider || settings.aiProvider),
+          aiModel: String(result.aiModel || settings.aiModel),
+          aiApiKey: String(result.aiApiKey || settings.aiApiKey || ''),
+          aiBaseUrl: String(result.aiBaseUrl || settings.aiBaseUrl || ''),
           credentialsPath: String(result.credentialsPath !== undefined && result.credentialsPath !== null ? result.credentialsPath : settings.credentialsPath || ''),
           trendsCredentialsPath: String(result.trendsCredentialsPath !== undefined && result.trendsCredentialsPath !== null ? result.trendsCredentialsPath : settings.trendsCredentialsPath || ''),
           isAuthorized: Boolean(result.isAuthorized !== undefined ? result.isAuthorized : settings.isAuthorized),
@@ -126,7 +142,7 @@ export default function SettingsPage() {
     setAuthorizing(true);
     setMessage(null);
     try {
-      const response = await fetch('http://localhost:5001/api/authorize', {
+      const response = await apiFetch('/api/authorize', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -164,7 +180,7 @@ export default function SettingsPage() {
     setClearing(true);
     setMessage(null);
     try {
-      const response = await fetch('http://localhost:5001/api/settings/clear', {
+      const response = await apiFetch('/api/settings/clear', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -174,7 +190,10 @@ export default function SettingsPage() {
       if (response.ok) {
         const result = await response.json();
         setSettings({
-          openaiApiKey: '',
+          aiProvider: 'openai',
+          aiModel: 'gpt-4o',
+          aiApiKey: '',
+          aiBaseUrl: '',
           credentialsPath: '',
           trendsCredentialsPath: '',
           isAuthorized: false,
@@ -237,36 +256,37 @@ export default function SettingsPage() {
           </div>
         ) : (
           <>
-            {/* OpenAI API Key */}
-            <div className="space-y-2">
-              <label htmlFor="openai-key" className="flex items-center space-x-2 text-sm font-medium text-gray-700">
-                <FontAwesomeIcon icon={faKey} className="text-gray-500" />
-                <span>OpenAI API Key</span>
-              </label>
-              <div className="relative">
-                <input
-                  id="openai-key"
-                  type={showApiKey ? "text" : "password"}
-                  value={settings.openaiApiKey}
-                  onChange={(e) => setSettings({ ...settings, openaiApiKey: e.target.value })}
-                  placeholder="sk-proj-..."
-                  className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                  aria-label={showApiKey ? "Hide API key" : "Show API key"}
-                >
-                  <FontAwesomeIcon icon={showApiKey ? faEyeSlash : faEye} />
-                </button>
+            {/* AI Provider */}
+            <div className="space-y-4 rounded-lg border border-blue-100 bg-blue-50/40 p-4">
+              <div>
+                <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900"><FontAwesomeIcon icon={faKey} className="text-blue-600" /> AI provider</h2>
+                <p className="mt-1 text-xs text-gray-600">Use Groq, OpenAI, or any OpenAI-compatible endpoint. Keep the key local and never commit it to source control.</p>
               </div>
-              <p className="text-xs text-gray-500">
-                Your OpenAI API key is used to generate insights. Get your key from{' '}
-                <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                  OpenAI Platform
-                </a>
-              </p>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label htmlFor="ai-provider" className="mb-2 block text-sm font-medium text-gray-700">Provider</label>
+                  <select id="ai-provider" value={settings.aiProvider} onChange={(e) => setSettings({ ...settings, aiProvider: e.target.value })} className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2">
+                    <option value="groq">Groq</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="custom">Custom OpenAI-compatible</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="ai-model" className="mb-2 block text-sm font-medium text-gray-700">Model</label>
+                  <input id="ai-model" value={settings.aiModel} onChange={(e) => setSettings({ ...settings, aiModel: e.target.value })} placeholder="openai/gpt-oss-120b" className="w-full rounded-lg border border-gray-300 px-4 py-2" />
+                </div>
+              </div>
+              <div>
+                <label htmlFor="ai-key" className="mb-2 block text-sm font-medium text-gray-700">API key</label>
+                <div className="relative">
+                  <input id="ai-key" type={showApiKey ? "text" : "password"} value={settings.aiApiKey} onChange={(e) => setSettings({ ...settings, aiApiKey: e.target.value })} placeholder="Paste provider key" className="w-full rounded-lg border border-gray-300 px-4 py-2 pr-10" />
+                  <button type="button" onClick={() => setShowApiKey(!showApiKey)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" aria-label={showApiKey ? "Hide API key" : "Show API key"}><FontAwesomeIcon icon={showApiKey ? faEyeSlash : faEye} /></button>
+                </div>
+              </div>
+              <div>
+                <label htmlFor="ai-base-url" className="mb-2 block text-sm font-medium text-gray-700">Base URL <span className="font-normal text-gray-500">(optional for Groq/OpenAI)</span></label>
+                <input id="ai-base-url" value={settings.aiBaseUrl} onChange={(e) => setSettings({ ...settings, aiBaseUrl: e.target.value })} placeholder="https://api.groq.com/openai/v1" className="w-full rounded-lg border border-gray-300 px-4 py-2" />
+              </div>
             </div>
 
             {/* Credentials Path */}
@@ -457,7 +477,7 @@ export default function SettingsPage() {
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
         <h2 className="text-lg font-semibold text-blue-900 mb-3">Setup Instructions</h2>
         <ol className="list-decimal list-inside space-y-2 text-sm text-blue-800">
-          <li>Get your OpenAI API key from the OpenAI Platform and paste it above</li>
+          <li>Choose an AI provider above and paste its API key</li>
           <li>Download your Google Search Console credentials (client_secret.json) from Google Cloud Console</li>
           <li>Enter the full path to your client_secret.json file</li>
           <li>Click "Save Settings" to save your configuration</li>
