@@ -1,0 +1,22 @@
+# Secrets and local-only files - never upload these
+dashboard_config.json
+authorized_trends_token.json
+authorizedcreds.dat
+client_secret.json
+client_secrets.json
+credentials.json
+.env
+.env.local
+
+# Local dev / unrelated to the Vercel deploy
+venv/
+__pycache__/
+backend/__pycache__/
+backend/services/__pycache__/
+backend/providers/**/__pycache__/
+backend_api.py
+backend_requirements.txt
+backend/
+data/
+docs/
+DATA_PERSISTENCE.md
