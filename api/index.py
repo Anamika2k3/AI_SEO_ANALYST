@@ -181,7 +181,7 @@ def _get_ai_client():
     if not api_key:
         return None, None
     base_url = os.environ.get("AI_BASE_URL") or "https://api.groq.com/openai/v1"
-    model = os.environ.get("AI_MODEL", "openai/gpt-oss-120b")
+    model = os.environ.get("AI_MODEL") or "openai/gpt-oss-120b"
     client = OpenAI(api_key=api_key, base_url=base_url)
     return client, model
 
